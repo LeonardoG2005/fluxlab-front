@@ -154,9 +154,15 @@ export default function TemplateBuilder({ onSave, onCancel, template = null }) {
       {/* Fields Builder Section */}
       <div className="space-y-4">
         <div className="flex items-center px-2">
-          <div>
+          <div className="w-full">
             <h3 className="text-lg font-bold text-gray-900">Creación de campos</h3>
-            <p className="text-xs text-gray-500 font-medium">Defina la estructura de datos para esta plantilla</p>
+            <div className="mt-2 rounded-xl border border-emerald-100 bg-emerald-50/70 backdrop-blur-sm px-4 py-3">
+              <p className="text-sm text-emerald-900/90 font-semibold leading-relaxed">
+                Defina la estructura de datos para esta plantilla. No incluya el campo 'Código',
+                ya que este será generado automáticamente por el sistema al momento de crear la
+                muestra o permitirá su ingreso manual en ese momento.
+              </p>
+            </div>
           </div>
         </div>
 

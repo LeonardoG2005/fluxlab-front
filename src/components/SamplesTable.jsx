@@ -49,6 +49,7 @@ export default function SamplesTable() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [sampleToDelete, setSampleToDelete] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -69,6 +70,8 @@ export default function SamplesTable() {
     templateId: '',
     status: 'pending'
   });
+
+  const [allSamples, setAllSamples] = useState([]);
 
   const normalizeText = (value) => {
     return String(value || '')
@@ -271,7 +274,9 @@ export default function SamplesTable() {
         })
       ]);
 
-      setSamples(Array.isArray(samplesData) ? samplesData : []);
+      const samplesArray = Array.isArray(samplesData) ? samplesData : [];
+      setSamples(samplesArray);
+      setAllSamples(samplesArray);
       setTemplates(Array.isArray(templatesData) ? templatesData : []);
       
       const projectsList = projectsResponse?.data && Array.isArray(projectsResponse.data) 
@@ -315,7 +320,27 @@ export default function SamplesTable() {
     setEditFormData({ status: '', fieldValues: {} });
   };
 
-  const saveInlineEdit = async (sample) => {
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    
+    if (query.trim() === '') {
+      setSamples(allSamples);
+    } else {
+      const normalizedQuery = normalizeText(query);
+      const filtered = allSamples.filter(sample => 
+        normalizeText(sample.code).includes(normalizedQuery)
+      );
+      setSamples(filtered);
+    }
+  };
+
+  const saveInlineEdit = async (event, sample) => {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    const scrollContainer = document.querySelector('main.flex-1.overflow-auto');
+    const previousScrollTop = scrollContainer?.scrollTop;
+
     setIsSubmitting(true);
     try {
       const template = templates.find(t => t.id === (sample.template?.id || sample.templateId));
@@ -333,9 +358,32 @@ export default function SamplesTable() {
         })
       };
 
-      await apiService.samples.updateWithValues(sample.id, payload);
-      await loadData();
+      const updatedSample = await apiService.samples.updateWithValues(sample.id, payload);
+
+      setSamples((prevSamples) => prevSamples.map((existingSample) => {
+        if (existingSample.id !== sample.id) return existingSample;
+
+        if (!updatedSample || typeof updatedSample !== 'object') {
+          return {
+            ...existingSample,
+            status: payload.status,
+          };
+        }
+
+        return {
+          ...existingSample,
+          ...updatedSample,
+          template: updatedSample.template ?? existingSample.template,
+          project: updatedSample.project ?? existingSample.project,
+        };
+      }));
       cancelEditing();
+
+      if (scrollContainer && typeof previousScrollTop === 'number') {
+        requestAnimationFrame(() => {
+          scrollContainer.scrollTop = previousScrollTop;
+        });
+      }
     } catch (err) {
       console.error('Error saving edit:', err);
       setError(err.message || 'Error al actualizar la muestra');
@@ -381,6 +429,9 @@ export default function SamplesTable() {
   const handleQuickAdd = async (templateId, projectId) => {
     const currentQuickAddRowKey = `${projectId}-${templateId}`;
 
+    const scrollContainer = document.querySelector('main.flex-1.overflow-auto');
+    const previousScrollTop = scrollContainer?.scrollTop;
+
     const triggerQuickAddErrorFlash = () => {
       setQuickAddErrorRowKey(currentQuickAddRowKey);
       window.setTimeout(() => {
@@ -415,10 +466,43 @@ export default function SamplesTable() {
         })
       };
 
-      await apiService.samples.createWithValues(payload);
-      await loadData();
+      const createdSample = await apiService.samples.createWithValues(payload);
+      const project = projects.find(p => p.id === projectId);
+
+      const normalizedSample = createdSample && typeof createdSample === 'object'
+        ? {
+            ...createdSample,
+            templateId: createdSample.templateId ?? templateId,
+            projectId: createdSample.projectId ?? projectId,
+            template: createdSample.template ?? template,
+            project: createdSample.project ?? project,
+          }
+        : {
+            id: `temp-${Date.now()}`,
+            code: payload.code,
+            status: payload.status,
+            templateId,
+            projectId,
+            template,
+            project,
+          };
+
+      setSamples((prevSamples) => {
+        if (normalizedSample?.id) {
+          const withoutSame = prevSamples.filter((s) => s.id !== normalizedSample.id);
+          return [...withoutSame, normalizedSample];
+        }
+        return [...prevSamples, normalizedSample];
+      });
+
       setQuickAddRow({ templateId: null, projectId: null, code: '', status: 'pending', fieldValues: {} });
       setQuickAddErrorRowKey(null);
+
+      if (scrollContainer && typeof previousScrollTop === 'number') {
+        requestAnimationFrame(() => {
+          scrollContainer.scrollTop = previousScrollTop;
+        });
+      }
     } catch (err) {
       setError(err.message || 'Error en creación rápida');
       triggerQuickAddErrorFlash();
@@ -795,12 +879,12 @@ export default function SamplesTable() {
 
   const groupedDataByProject = projects.map(project => {
     const projectSamples = filteredSamples.filter(s => 
-      s.project?.id === project.id || (s.project && s.project.id === project.id)
+      s.project?.id === project.id || (s.project && s.project.id === project.id) || s.projectId === project.id
     );
 
     const projectTemplates = templates.map(template => {
       const templateSamples = projectSamples.filter(s => 
-        s.template?.id === template.id || (s.template && s.template.id === template.id)
+        s.template?.id === template.id || (s.template && s.template.id === template.id) || s.templateId === template.id
       );
       return { ...template, samples: templateSamples };
     }).filter(t => t.samples.length > 0);
@@ -849,21 +933,18 @@ export default function SamplesTable() {
           <p className="text-xs text-gray-500 pl-3 mt-1 font-bold">{samples.length} muestras en total</p>
         </div>
         
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          {/* descomentar esto de filtrado */}
-          {/* <div className="w-full md:w-48">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            >
-              <option value="all">Todos los estados</option>
-              <option value="pending">Pendiente</option>
-              <option value="completed">Completado</option>
-              <option value="rejected">Rechazado</option>
-            </select>
-          </div> */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full md:w-auto">
+          <div className="flex-1 md:flex-none md:w-64">
+            <input
+              type="text"
+              placeholder="Buscar por código de muestra..."
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+            />
+          </div>
           <button 
+            type="button"
             onClick={() => setShowCreateModal(true)}
             className="whitespace-nowrap bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition font-medium text-sm flex items-center gap-2 shadow-sm"
           >
@@ -1047,7 +1128,8 @@ export default function SamplesTable() {
                                   {isEditingCurrent ? (
                                     <div className="flex items-center justify-end gap-3">
                                       <button 
-                                        onClick={() => saveInlineEdit(sample)}
+                                        type="button"
+                                        onClick={(event) => saveInlineEdit(event, sample)}
                                         className="text-green-600 hover:scale-125 transition text-lg"
                                         title="Guardar"
                                         disabled={isSubmitting}
@@ -1055,6 +1137,7 @@ export default function SamplesTable() {
                                         {isSubmitting ? "..." : <Icon icon={faCheck} size={16} color="currentColor" />}
                                       </button>
                                       <button 
+                                        type="button"
                                         onClick={cancelEditing}
                                         className="text-red-600 hover:scale-125 transition text-lg"
                                         title="Cancelar"
@@ -1065,10 +1148,10 @@ export default function SamplesTable() {
                                     </div>
                                   ) : (
                                     <div className="flex items-center justify-end gap-3 opacity-30 hover:opacity-100 transition">
-                                      <button onClick={() => startEditing(sample)} className="hover:scale-120 hover:grayscale-0 transition grayscale" title="Editar">
+                                      <button type="button" onClick={() => startEditing(sample)} className="hover:scale-120 hover:grayscale-0 transition grayscale" title="Editar">
                                         <Icon icon={faPenToSquare} size={14} color="currentColor" />
                                       </button>
-                                      <button onClick={() => handleDelete(sample.id)} className="hover:scale-120 hover:grayscale-0 transition grayscale" title="Eliminar">
+                                      <button type="button" onClick={() => handleDelete(sample.id)} className="hover:scale-120 hover:grayscale-0 transition grayscale" title="Eliminar">
                                         <Icon icon={faTrashCan} size={14} color="currentColor" />
                                       </button>
                                     </div>
@@ -1135,6 +1218,7 @@ export default function SamplesTable() {
                             ))}
                             <td className="px-6 py-3 text-right">
                               <button
+                                type="button"
                                 onClick={() => handleQuickAdd(template.id, project.id)}
                                 className={`font-bold text-lg transition-colors ${
                                   quickAddErrorRowKey === `${project.id}-${template.id}`
@@ -1283,7 +1367,7 @@ export default function SamplesTable() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
             {/* Modal Header */}
-            <div className="bg-blue-600 px-6 py-4 flex items-center justify-between text-white">
+            <div className="bg-emerald-500 px-6 py-4 flex items-center justify-between text-white">
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold">Crear Muestra</h3>
               </div>
@@ -1304,7 +1388,7 @@ export default function SamplesTable() {
                 <input
                   type="text"
                   placeholder="Ej: BIO-MS-001"
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 transition"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-700 transition"
                   value={createFormData.code}
                   onChange={(e) => setCreateFormData({...createFormData, code: e.target.value})}
                   required
@@ -1317,7 +1401,7 @@ export default function SamplesTable() {
                   PROYECTO *
                 </label>
                 <select
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 appearance-none transition"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-700 appearance-none transition"
                   value={createFormData.projectId}
                   onChange={(e) => setCreateFormData({...createFormData, projectId: e.target.value})}
                   required
@@ -1335,7 +1419,7 @@ export default function SamplesTable() {
                   TEMPLATE *
                 </label>
                 <select
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 transition"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-700 transition"
                   value={createFormData.templateId}
                   onChange={(e) => setCreateFormData({...createFormData, templateId: e.target.value})}
                   required
@@ -1353,7 +1437,7 @@ export default function SamplesTable() {
                   ESTADO
                 </label>
                 <select
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 transition"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-700 transition"
                   value={createFormData.status}
                   onChange={(e) => setCreateFormData({...createFormData, status: e.target.value})}
                 >
@@ -1375,7 +1459,7 @@ export default function SamplesTable() {
                 <button 
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-lg shadow-blue-200 transition disabled:opacity-50"
+                  className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-lg shadow-emerald-200 transition disabled:opacity-50"
                 >
                   {isSubmitting ? 'Creando...' : 'Crear'}
                 </button>

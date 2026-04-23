@@ -368,6 +368,16 @@ export const apiService = {
       return apiRequest(`/samples/${id}`);
     },
 
+    async searchByCode(code) {
+      const searchParams = new URLSearchParams();
+      if (code && String(code).trim()) {
+        searchParams.append('code', String(code).trim());
+      }
+      const query = searchParams.toString();
+      const endpoint = query ? `/samples/search/by-code?${query}` : '/samples';
+      return apiRequest(endpoint);
+    },
+
     async create(sampleData) {
       return apiRequest('/samples', {
         method: 'POST',
