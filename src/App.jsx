@@ -11,6 +11,7 @@ import TestsPage from './pages/TestsPage';
 import ReportsPage from './pages/ReportsPage';
 import DocumentsPage from './pages/DocumentsPage';
 import UserManagementPage from './pages/UserManagementPage';
+import AccountSettingsPage from './pages/AccountSettingsPage';
 import './App.css';
 
 function App() {
@@ -104,6 +105,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <UserManagementPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/account-settings"
+            element={
+              <ProtectedRoute>
+                <AccountSettingsPage />
               </ProtectedRoute>
             }
           />

@@ -158,7 +158,7 @@ export async function deleteUser(userId) {
 /**
  * Update user password
  */
-export async function updateUserPassword(userId, newPassword) {
+export async function updateUserPassword(userId, currentPassword, newPassword) {
   try {
     const token = await getAuthToken();
     if (!token) {
@@ -171,7 +171,7 @@ export async function updateUserPassword(userId, newPassword) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ password: newPassword }),
+      body: JSON.stringify({ currentPassword, newPassword }),
     });
 
     if (!response.ok) {

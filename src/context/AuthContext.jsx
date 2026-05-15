@@ -247,6 +247,19 @@ export function AuthProvider({ children }) {
     setUser(updatedUser);
   };
 
+  const updateUserProfile = (updates) => {
+    setUser((currentUser) => {
+      if (!currentUser) {
+        return updates;
+      }
+
+      return {
+        ...currentUser,
+        ...updates,
+      };
+    });
+  };
+
   /**
    * Get user role
    * For admins: returns 'admin' (from app_metadata.role)
@@ -302,6 +315,7 @@ export function AuthProvider({ children }) {
     logout,
     signup,
     updateUserPasswordChanged,
+    updateUserProfile,
     
     // Utilities
     isAuthenticated,

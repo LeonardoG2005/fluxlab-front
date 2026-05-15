@@ -9,7 +9,7 @@
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { faRightFromBracket } from '@fortawesome/free-solid-svg-icons';
+import { faGear, faRightFromBracket } from '@fortawesome/free-solid-svg-icons';
 import Icon from './Icon';
 
 export function Navbar() {
@@ -113,26 +113,19 @@ export function Navbar() {
                   <p className="text-xs text-gray-500">{user?.email}</p>
                 </div>
 
-                {/* Menu Items - commented for now
-                <a
-                  href="#profile"
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                {/* Account Settings */}
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    navigate('/account-settings');
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition font-medium"
                 >
-                  Profile
-                </a>
-                <a
-                  href="#settings"
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
-                >
-                  Settings
-                </a>
-                <a
-                  href="#help"
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
-                >
-                  Help & Support
-                </a>
-                */}
+                  <span className="inline-flex items-center gap-2">
+                    <Icon icon={faGear} size={14} color="currentColor" />
+                    Configuración
+                  </span>
+                </button>
 
                 {/* Divider */}
                 <div className="border-t border-gray-100 my-1"></div>
