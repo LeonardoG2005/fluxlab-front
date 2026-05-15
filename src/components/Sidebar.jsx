@@ -8,6 +8,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import {
+  faChartLine,
   faFlask,
   faFolderOpen,
   faUsers,
@@ -18,13 +19,13 @@ import logo from '../assets/logoConFondo.jpeg';
 import Icon from './Icon';
 
 const menuItems = [
-  // {
-  //   id: 'dashboard',
-  //   label: 'Dashboard',
-  //   icon: 'dashboard-icon',
-  //   path: '/dashboard',
-  //   roles: ['authenticated', 'admin', 'user']
-  // },
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: faChartLine,
+    path: '/dashboard',
+    roles: ['authenticated', 'admin', 'user']
+  },
   {
     id: 'clients',
     label: 'Clientes',

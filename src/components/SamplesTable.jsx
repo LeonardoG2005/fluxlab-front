@@ -42,6 +42,8 @@ export default function SamplesTable() {
   const [importTemplateName, setImportTemplateName] = useState('');
   const [importFieldSettings, setImportFieldSettings] = useState([]);
   const [importModalError, setImportModalError] = useState(null);
+  const [dragActiveProjectId, setDragActiveProjectId] = useState(null);
+  const dragDepthRef = useRef(0);
   
   // Inline Editing State
   const [editingId, setEditingId] = useState(null);
@@ -60,6 +62,9 @@ export default function SamplesTable() {
     message: ''
   });
   const [sampleToDelete, setSampleToDelete] = useState(null);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteTarget, setBulkDeleteTarget] = useState(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState(INITIAL_SAMPLE_FILTERS);
@@ -723,11 +728,64 @@ export default function SamplesTable() {
     setShowDeleteModal(true);
   };
 
+  const handleBulkDeleteClick = (project, template) => {
+    setBulkDeleteTarget({
+      projectId: project.id,
+      templateId: template.id,
+      projectName: project.name,
+      templateName: template.name,
+      sampleCount: template.samples.length
+    });
+    setShowBulkDeleteModal(true);
+  };
+
   const handleImportClick = (projectId) => {
     const input = fileInputRefs.current[projectId];
     if (!input) return;
     input.value = '';
     input.click();
+  };
+
+  const isFileDragEvent = (event) => {
+    const types = Array.from(event?.dataTransfer?.types || []);
+    return types.includes('Files');
+  };
+
+  const handleDragEnter = (projectId, event) => {
+    if (!isFileDragEvent(event)) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setDragActiveProjectId(projectId);
+  };
+
+  const handleDragOver = (projectId, event) => {
+    if (!isFileDragEvent(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    if (dragActiveProjectId !== projectId) {
+      setDragActiveProjectId(projectId);
+    }
+  };
+
+  const handleDragLeave = (projectId, event) => {
+    if (!isFileDragEvent(event)) return;
+    event.preventDefault();
+    dragDepthRef.current = Math.max(dragDepthRef.current - 1, 0);
+    if (dragDepthRef.current === 0 && dragActiveProjectId === projectId) {
+      setDragActiveProjectId(null);
+    }
+  };
+
+  const handleDropFile = (project, event) => {
+    if (!isFileDragEvent(event)) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setDragActiveProjectId(null);
+
+    const droppedFile = event.dataTransfer?.files?.[0];
+    if (!droppedFile) return;
+
+    handleImportFile(project, droppedFile);
   };
 
   const resetImportDraft = () => {
@@ -913,8 +971,7 @@ export default function SamplesTable() {
     }
   };
 
-  const handleImportFileChange = async (project, event) => {
-    const file = event.target.files?.[0];
+  const handleImportFile = async (project, file) => {
     if (!file) return;
 
     setError(null);
@@ -925,7 +982,7 @@ export default function SamplesTable() {
     try {
       if (file.size > MAX_IMPORT_FILE_BYTES) {
         const fileSizeInMb = (file.size / (1024 * 1024)).toFixed(2);
-        throw new Error(`El archivo pesa ${fileSizeInMb} MB y excede el límite de 20 MB.`);
+        throw new Error(`El archivo pesa ${fileSizeInMb} MB y excede el limite de 20 MB.`);
       }
 
       const fileNameWithoutExtension = file.name.replace(/\.[^/.]+$/, '').trim();
@@ -1017,9 +1074,17 @@ export default function SamplesTable() {
       setError(err.message || 'Error al importar el archivo.');
     } finally {
       setImportingProjectId(null);
-      if (event.target) {
-        event.target.value = '';
-      }
+    }
+  };
+
+  const handleImportFileChange = async (project, event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    await handleImportFile(project, file);
+
+    if (event.target) {
+      event.target.value = '';
     }
   };
 
@@ -1036,6 +1101,40 @@ export default function SamplesTable() {
       setError('Error al eliminar la muestra');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const confirmBulkDelete = async () => {
+    if (!bulkDeleteTarget) return;
+
+    try {
+      setBulkDeleting(true);
+      const response = await apiService.samples.removeBulk(
+        bulkDeleteTarget.projectId,
+        bulkDeleteTarget.templateId
+      );
+
+      setSamples((currentSamples) => currentSamples.filter((sample) => {
+        const sampleProjectId = sample.project?.id || sample.projectId;
+        const sampleTemplateId = sample.template?.id || sample.templateId;
+        return !(
+          sampleProjectId === bulkDeleteTarget.projectId &&
+          sampleTemplateId === bulkDeleteTarget.templateId
+        );
+      }));
+
+      if (response?.deleted) {
+        setImportMessage(
+          `Se eliminaron ${response.deleted} muestras de la plantilla "${bulkDeleteTarget.templateName}".`
+        );
+      }
+    } catch (err) {
+      console.error('Error deleting samples:', err);
+      setError(err.message || 'Error al eliminar las muestras');
+    } finally {
+      setBulkDeleting(false);
+      setShowBulkDeleteModal(false);
+      setBulkDeleteTarget(null);
     }
   };
 
@@ -1323,7 +1422,22 @@ export default function SamplesTable() {
       ) : (
         <div className="space-y-8 mt-6">
           {groupedDataByProject.map((project) => (
-            <div key={project.id} className="space-y-4">
+            <div
+              key={project.id}
+              className="space-y-4 relative"
+              onDragEnter={(event) => handleDragEnter(project.id, event)}
+              onDragOver={(event) => handleDragOver(project.id, event)}
+              onDragLeave={(event) => handleDragLeave(project.id, event)}
+              onDrop={(event) => handleDropFile(project, event)}
+            >
+              {dragActiveProjectId === project.id && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-emerald-400 bg-emerald-50/90 text-emerald-900 pointer-events-none">
+                  <div className="flex flex-col items-center gap-2 text-center px-6">
+                    <div className="text-lg font-black uppercase tracking-[0.2em]">Arrastra aqui</div>
+                    <div className="text-xs font-semibold uppercase tracking-widest">Suelta para importar muestras</div>
+                  </div>
+                </div>
+              )}
               {/* Project Bar */}
               <div className="bg-slate-900 text-white px-6 py-3 rounded-lg flex items-center justify-between shadow-md gap-4">
                 <div className="flex items-center gap-3">
@@ -1372,16 +1486,27 @@ export default function SamplesTable() {
                 {project.templates.map(template => (
                   <div key={`${project.id}-${template.id}`} className="ml-4 bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm">
                     {/* Template Header */}
-                    <div className="bg-gray-50/50 px-6 py-3 border-b border-gray-100 flex items-center justify-between">
+                    <div className="bg-gray-50/50 px-6 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <span className="text-slate-400">
                           <Icon icon={faFileLines} size={14} color="currentColor" />
                         </span>
                         <h3 className="text-slate-700 font-bold">Plantilla: {template.name}</h3>
                       </div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                        {template.samples.length} MUESTRAS
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          {template.samples.length} MUESTRAS
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleBulkDeleteClick(project, template)}
+                          disabled={template.samples.length === 0 || bulkDeleting}
+                          className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-md border border-red-200 text-red-500 hover:bg-red-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Icon icon={faTrashCan} size={10} color="currentColor" />
+                          Eliminar todas
+                        </button>
+                      </div>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -1860,6 +1985,45 @@ export default function SamplesTable() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* BULK DELETE MODAL */}
+      {showBulkDeleteModal && bulkDeleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 overflow-hidden">
+            <div className="mb-4 text-center">
+              <div className="bg-red-50 text-red-500 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
+                <Icon icon={faTriangleExclamation} size={18} color="currentColor" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Eliminar todas las muestras</h3>
+              <p className="text-gray-500 text-sm">
+                Se eliminaran {bulkDeleteTarget.sampleCount} muestras de la plantilla
+                "{bulkDeleteTarget.templateName}" en el proyecto "{bulkDeleteTarget.projectName}".
+              </p>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBulkDeleteModal(false);
+                  setBulkDeleteTarget(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold transition"
+                disabled={bulkDeleting}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmBulkDelete}
+                className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold transition disabled:opacity-50"
+                disabled={bulkDeleting}
+              >
+                {bulkDeleting ? 'Eliminando...' : 'Eliminar todo'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -427,6 +427,25 @@ export const apiService = {
       return apiRequest(`/samples/${id}`, {
         method: 'DELETE'
       });
+    },
+
+    async removeBulk(projectId, templateId) {
+      const searchParams = new URLSearchParams();
+
+      if (projectId && String(projectId).trim()) {
+        searchParams.append('projectId', String(projectId).trim());
+      }
+
+      if (templateId && String(templateId).trim()) {
+        searchParams.append('templateId', String(templateId).trim());
+      }
+
+      const query = searchParams.toString();
+      const endpoint = query ? `/samples/bulk?${query}` : '/samples/bulk';
+
+      return apiRequest(endpoint, {
+        method: 'DELETE'
+      });
     }
   },
 
