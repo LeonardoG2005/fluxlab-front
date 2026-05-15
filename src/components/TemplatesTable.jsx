@@ -8,11 +8,13 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   faClipboardList,
+  faDownload,
   faFileLines,
   faPenToSquare,
   faTrashCan,
   faTriangleExclamation
 } from '@fortawesome/free-solid-svg-icons';
+import * as XLSX from 'xlsx';
 import { apiService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import TemplateBuilder from './TemplateBuilder';
@@ -75,6 +77,97 @@ export default function TemplatesTable() {
   const handleEdit = (template) => {
     setSelectedTemplate(template);
     setShowBuilder(true);
+  };
+
+  const sanitizeFilename = (value) => {
+    const baseName = String(value || '').trim();
+    const normalized = baseName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const sanitized = normalized.replace(/[^a-z0-9-_]+/gi, '_').replace(/^_+|_+$/g, '');
+
+    return sanitized || 'template';
+  };
+
+  const buildTemplateHeaders = (template) => {
+    const baseHeaders = ['clientCode', 'code'];
+    const fields = Array.isArray(template?.fields) ? template.fields : [];
+    const reservedHeaders = new Set(baseHeaders.map((header) => header.toLowerCase()));
+    const uniqueHeaders = [];
+    const seen = new Set();
+
+    fields
+      .map((field) => String(field?.name || '').trim())
+      .filter(Boolean)
+      .forEach((name) => {
+        const key = name.toLowerCase();
+        if (reservedHeaders.has(key) || seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        uniqueHeaders.push(name);
+      });
+
+    return [...baseHeaders, ...uniqueHeaders];
+  };
+
+  const formatCreatedAt = (value) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+
+    return parsed.toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  const handleDownloadTemplate = (template) => {
+    try {
+      const headers = buildTemplateHeaders(template);
+      const worksheet = XLSX.utils.aoa_to_sheet([headers]);
+      worksheet['!cols'] = headers.map(() => ({ wch: 20 }));
+      const workbook = XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla');
+
+      const createdAt = formatCreatedAt(template?.createdAt || template?.created_at);
+      const fields = Array.isArray(template?.fields) ? template.fields : [];
+      const infoRows = [
+        ['Nombre', template?.name || ''],
+        ['Descripcion', template?.description || ''],
+        ['Creado en', createdAt]
+      ];
+
+      const fieldRows = fields.map((field) => [
+        String(field?.name || ''),
+        String(field?.dataType || field?.data_type || ''),
+        field?.required ? 'Si' : 'No'
+      ]);
+
+      const infoSheetRows = [
+        ...infoRows,
+        [],
+        ['Campos'],
+        ['Nombre', 'Tipo de dato', 'Requerido'],
+        ...fieldRows
+      ];
+      const infoSheet = XLSX.utils.aoa_to_sheet(infoSheetRows);
+      infoSheet['!cols'] = [
+        { wch: 28 },
+        { wch: 40 },
+        { wch: 16 }
+      ];
+      infoSheet['!rows'] = infoSheetRows.map((_, index) => ({
+        hpt: index <= 2 ? 22 : 18
+      }));
+      XLSX.utils.book_append_sheet(workbook, infoSheet, 'Informacion');
+
+      const fileName = `${sanitizeFilename(template?.name)}.xlsx`;
+      XLSX.writeFile(workbook, fileName, { bookType: 'xlsx' });
+    } catch (err) {
+      console.error('Error downloading template:', err);
+      setError('Error al descargar la plantilla: ' + (err.message || 'Intenta de nuevo más tarde'));
+    }
   };
 
   const handleSaveSuccess = (updatedTemplate) => {
@@ -204,6 +297,13 @@ export default function TemplatesTable() {
                     title="Editar"
                   >
                     <Icon icon={faPenToSquare} size={14} color="currentColor" />
+                  </button>
+                  <button
+                    onClick={() => handleDownloadTemplate(template)}
+                    className="p-2 text-gray-300 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                    title="Descargar"
+                  >
+                    <Icon icon={faDownload} size={14} color="currentColor" />
                   </button>
                   <button
                     onClick={() => handleDelete(template.id)}
