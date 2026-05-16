@@ -9,6 +9,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import {
   faFlask,
+  faFileLines,
   faFolderOpen,
   faUsers,
   faUserGear
@@ -53,18 +54,18 @@ const menuItems = [
     path: '/samples',
     roles: ['authenticated', 'admin', 'user']
   },
+  {
+    id: 'reports',
+    label: 'Reportes',
+    icon: faFileLines,
+    path: '/reports',
+    roles: ['authenticated', 'admin', 'user']
+  },
   // {
   //   id: 'tests',
   //   label: 'Pruebas',
   //   icon: 'tests-icon',
   //   path: '/tests',
-  //   roles: ['authenticated', 'admin', 'user']
-  // },
-  // {
-  //   id: 'reports',
-  //   label: 'Reportes',
-  //   icon: 'reports-icon',
-  //   path: '/reports',
   //   roles: ['authenticated', 'admin', 'user']
   // },
   // {
