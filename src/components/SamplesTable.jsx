@@ -1444,11 +1444,8 @@ export default function SamplesTable() {
                   <div className="bg-teal-500 p-1.5 rounded-md text-white">
                     <Icon icon={faFolderOpen} size={14} color="currentColor" />
                   </div>
-                  <h2 className="text-lg font-bold flex items-center gap-3">
-                    <span>Proyecto: {project.name}</span>
-                    <span className="bg-emerald-950/40 text-emerald-300 px-2 py-1 rounded border border-emerald-400/30 text-[10px] font-mono uppercase tracking-widest">
-                      ID: {String(project.id || '').slice(0, 8)}
-                    </span>
+                  <h2 className="text-lg font-bold">
+                    Proyecto: {project.name}
                   </h2>
                 </div>
 
