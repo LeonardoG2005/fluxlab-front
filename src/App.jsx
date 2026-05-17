@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ClientsPage from './pages/ClientsPage';
 import ProjectsPage from './pages/ProjectsPage';
+import ProjectDetailPage from './pages/ProjectDetailPage';
 import SamplesPage from './pages/SamplesPage';
 import TestsPage from './pages/TestsPage';
 import ReportsPage from './pages/ReportsPage';
@@ -60,6 +61,15 @@ function App() {
             element={
               <ProtectedRoute>
                 <ProjectsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/projects/:projectId/detail"
+            element={
+              <ProtectedRoute>
+                <ProjectDetailPage />
               </ProtectedRoute>
             }
           />

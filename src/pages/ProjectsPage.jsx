@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
+import { useNavigate } from 'react-router-dom';
+import { faTriangleExclamation, faMagnifyingGlass, faFile } from '@fortawesome/free-solid-svg-icons';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import Icon from '../components/Icon';
@@ -547,6 +548,7 @@ function isSameId(left, right) {
 }
 
 export default function ProjectsPage() {
+  const navigate = useNavigate();
   const createEndDateBounds = useMemo(() => getCreateEndDateBounds(), []);
 
   const [projects, setProjects] = useState([]);
@@ -1159,6 +1161,26 @@ export default function ProjectsPage() {
                           </div>
 
                           <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/projects/${project.id}/detail`)}
+                              className="inline-flex items-center justify-center gap-2 bg-white! border border-gray-300 text-gray-700 hover:bg-gray-50! px-4! py-2! rounded-md text-sm font-semibold transition-all"
+                            >
+                              <div className="relative w-6 h-6 flex items-center justify-center">
+                                <Icon icon={faFile} size={18} color="currentColor" />
+                                <Icon 
+                                  icon={faMagnifyingGlass} 
+                                  size={10} 
+                                  color="currentColor" 
+                                  className="absolute bottom-0 right-0"
+                                  style={{
+                                    filter: 'drop-shadow(0 0 1px white) drop-shadow(0 0 0.5px white)',
+                                    textShadow: '0 0 3px white, 0 0 2px white'
+                                  }}
+                                />
+                              </div>
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => openEditModal(project)}

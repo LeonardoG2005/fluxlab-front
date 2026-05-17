@@ -114,7 +114,7 @@ export default function DashboardPage() {
                   <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-500">Panel general</p>
                   <h1 className="text-3xl font-black text-slate-900 mt-2 flex items-center gap-3">
                     Dashboard
-                    <span className="text-xs font-black uppercase tracking-[0.2em] bg-slate-900 text-white px-3 py-1 rounded-full">
+                    <span className="text-xs font-black uppercase tracking-[0.2em] bg-emerald-500 text-white px-3 py-1 rounded-full">
                       FluxLab
                     </span>
                   </h1>
