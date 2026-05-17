@@ -68,6 +68,22 @@ const formatDateForFile = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const sanitizeSheetName = (name) => {
+  if (!name) return 'Hoja';
+  // Remove characters not allowed in Excel sheet names and trim to 31 chars
+  const forbidden = /[\\/\?\*\[\]:]/g;
+  const cleaned = String(name).replace(forbidden, ' ').trim();
+  return cleaned.substring(0, 31);
+};
+
+const sanitizeFileName = (name) => {
+  if (!name) return '';
+  // Replace spaces with underscores and remove characters invalid for filenames
+  const forbidden = /[\\/:\*?"<>|\[\]]/g;
+  const cleaned = String(name).replace(forbidden, '').replace(/\s+/g, '_').trim();
+  return cleaned.substring(0, 100);
+};
+
 const getSampleDate = (sample) =>
   firstNonEmptyText(sample?.createdAt, sample?.receivedAt, sample?.updatedAt);
 
@@ -257,7 +273,8 @@ export default function ReportsPage() {
   }, [filteredSamples]);
 
   const templateOptions = useMemo(() => {
-    if (!filters.projectId) return templates;
+    // Require project selection: no templates shown until a project is chosen
+    if (!filters.projectId) return [];
 
     const templateIds = new Set(
       samples
@@ -285,76 +302,98 @@ export default function ReportsPage() {
   };
 
   const handleExportClick = () => {
+    if (!filters.projectId) {
+      setExportError('Seleccione un proyecto antes de exportar.');
+      return;
+    }
+
     if (!filteredSamples.length) {
       setExportError('No hay muestras para exportar con los filtros actuales.');
       return;
     }
+
     setExportError('');
     setShowExportModal(true);
   };
 
   const handleExportConfirm = () => {
     const now = new Date();
-    const fileName = `resultados_pruebas_${formatDateForFile(now)}.xlsx`;
-    const fieldNameResolver = (fieldId) => templateFieldColumnMap.get(fieldId)?.split(' - ').slice(1).join(' - ');
+    const projectId = filters.projectId;
+    const projectName = projectsById.get(String(projectId))?.name || String(projectId || 'proyecto');
+    const safeProject = sanitizeFileName(projectName) || 'proyecto';
+    const fileName = `resultados__${safeProject}__${formatDateForFile(now)}.xlsx`;
+    if (!projectId) {
+      setExportError('Seleccione un proyecto antes de exportar.');
+      return;
+    }
 
-    const rows = filteredSamples.map((sample, index) => {
+    const projectSamples = filteredSamples.filter((s) => String(s?.project?.id || s?.projectId || '') === String(projectId));
+    if (!projectSamples.length) {
+      setExportError('No hay muestras para el proyecto seleccionado con los filtros aplicados.');
+      return;
+    }
+
+    // Group samples by template
+    const groups = new Map();
+    projectSamples.forEach((sample) => {
       const templateId = String(sample?.template?.id || sample?.templateId || '');
-      const projectId = String(sample?.project?.id || sample?.projectId || '');
-      const template = templatesById.get(templateId) || sample?.template;
-      const project = projectsById.get(projectId) || sample?.project;
-      const values = sample?.sampleFieldValues || sample?.values || [];
-
-      const row = {
-        'ID Muestra': firstNonEmptyText(sample?.id, `row-${index + 1}`),
-        'Codigo Muestra': getSampleCode(sample),
-        Proyecto: firstNonEmptyText(project?.name, '-'),
-        'Tipo de prueba': firstNonEmptyText(template?.name, '-'),
-        Estado: getSampleStatus(sample),
-        Fecha: formatDateTime(getSampleDate(sample)),
-        'Resultado obtenido': buildResultSummary(values, fieldNameResolver)
-      };
-
-      fieldColumns.forEach((columnName) => {
-        row[columnName] = '';
-      });
-
-      values.forEach((value) => {
-        const fieldId = String(value?.field?.id || value?.fieldId || '');
-        const columnName = templateFieldColumnMap.get(fieldId);
-        if (!columnName || !(columnName in row)) return;
-        const resolvedValue = formatValueFromField(value);
-        if (resolvedValue !== '') {
-          row[columnName] = resolvedValue;
-        }
-      });
-
-      return row;
+      if (!groups.has(templateId)) {
+        groups.set(templateId, { template: templatesById.get(templateId) || sample?.template, samples: [] });
+      }
+      groups.get(templateId).samples.push(sample);
     });
 
-    const summaryRows = [
-      ['Reporte de Resultados'],
-      ['Fecha exportacion', formatDateTime(now.toISOString())],
-      ['Total muestras', statusSummary.total],
-      ['Completadas', statusSummary.completed],
-      ['Pendientes', statusSummary.pending],
-      ['Rechazadas', statusSummary.rejected],
-      [],
-      ['Filtros aplicados'],
-      ['Proyecto', filters.projectId ? (projectsById.get(filters.projectId)?.name || filters.projectId) : 'Todos'],
-      ['Plantilla', filters.templateId ? (templatesById.get(filters.templateId)?.name || filters.templateId) : 'Todas'],
-      ['Estado', filters.status || 'Todos'],
-      ['Desde', filters.fromDate || '-'],
-      ['Hasta', filters.toDate || '-'],
-      ['Busqueda', filters.search || '-']
-    ];
-
     const workbook = XLSX.utils.book_new();
-    const resultsSheet = XLSX.utils.json_to_sheet(rows);
-    const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
 
-    XLSX.utils.book_append_sheet(workbook, resultsSheet, 'Resultados');
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Resumen');
+    // For each template, create a sheet with columns: base cols + template fields
+    for (const [templateId, { template, samples: tplSamples }] of groups.entries()) {
+      const templateName = firstNonEmptyText(template?.name, 'Plantilla');
+
+      const fieldList = Array.isArray(template?.fields) ? template.fields : [];
+      const baseCols = ['ID Muestra', 'Codigo Muestra', 'Tipo de prueba', 'Estado', 'Fecha'];
+      const fieldCols = fieldList.map((f) => (f?.name ? String(f.name) : `Campo ${f?.id || ''}`));
+      const columns = [...baseCols, ...fieldCols];
+
+      const rows = tplSamples.map((sample, idx) => {
+        const values = sample?.sampleFieldValues || sample?.values || [];
+        const row = {
+          'ID Muestra': firstNonEmptyText(sample?.id, `row-${idx + 1}`),
+          'Codigo Muestra': getSampleCode(sample),
+          'Tipo de prueba': firstNonEmptyText(templateName, '-'),
+          Estado: getSampleStatus(sample),
+          Fecha: formatDateTime(getSampleDate(sample))
+        };
+
+        // Initialize field columns
+        fieldCols.forEach((col) => {
+          row[col] = '';
+        });
+
+        // Fill values based on field id mapping
+        values.forEach((value) => {
+          const fieldId = String(value?.field?.id || value?.fieldId || '');
+          const fieldDef = fieldList.find((f) => String(f?.id || '') === fieldId);
+          if (!fieldDef) return;
+          const colName = fieldDef.name || `campo_${fieldId}`;
+          row[colName] = formatValueFromField(value);
+        });
+
+        return row;
+      });
+
+      const header = columns;
+      const sheet = XLSX.utils.json_to_sheet(rows, { header });
+      // Generate safe, unique sheet name
+      let sheetName = sanitizeSheetName(`Plantilla ${templateName}`);
+      let suffix = 1;
+      while (workbook.SheetNames && workbook.SheetNames.includes(sheetName)) {
+        sheetName = sanitizeSheetName(`Plantilla ${templateName} ${suffix}`);
+        suffix += 1;
+      }
+
+      XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    }
+
     XLSX.writeFile(workbook, fileName);
 
     setShowExportModal(false);
@@ -373,10 +412,10 @@ export default function ReportsPage() {
 
         <main className="flex-1 overflow-auto">
           <div className="p-6 md:p-8 space-y-6">
-            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-              <div className="max-w-2xl">
-                <h1 className="text-4xl font-bold text-gray-900">Reportes de resultados</h1>
-                <p className="text-gray-600 text-sm mt-2 leading-relaxed">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Reportes de resultados</h1>
+                <p className="text-gray-600 text-sm">
                   Exporta resultados de pruebas basados en muestras y filtros.
                 </p>
               </div>
@@ -391,7 +430,8 @@ export default function ReportsPage() {
                 <button
                   type="button"
                   onClick={handleExportClick}
-                  className="px-5 py-2 rounded-lg !border-emerald-600 !bg-emerald-600 !text-white font-bold text-sm shadow-md hover:!bg-emerald-700 transition inline-flex items-center gap-2"
+                  disabled={!filters.projectId}
+                  className={`px-5 py-2 rounded-lg !border-emerald-600 !bg-emerald-600 !text-white font-bold text-sm shadow-md hover:!bg-emerald-700 transition inline-flex items-center gap-2 ${!filters.projectId ? 'opacity-50 cursor-not-allowed hover:!bg-emerald-600' : ''}`}
                 >
                   <Icon icon={faDownload} size={14} color="currentColor" />
                   Exportar Excel
@@ -451,18 +491,24 @@ export default function ReportsPage() {
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     />
 
-                    <select
-                      value={filters.projectId}
-                      onChange={(event) => updateFilter('projectId', event.target.value)}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-                    >
-                      <option value="">Todos los proyectos</option>
-                      {projects.map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={filters.projectId}
+                        onChange={(event) => updateFilter('projectId', event.target.value)}
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                        aria-required={true}
+                      >
+                        <option value="" disabled>Selecciona un proyecto</option>
+                        {projects.map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.name}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-600 pointer-events-none text-sm">*</span>
+                    </div>
+
+                    
 
                     <select
                       value={filters.templateId}
@@ -582,11 +628,11 @@ export default function ReportsPage() {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
             <div className="bg-emerald-600 px-5 py-4 text-white">
               <h3 className="text-lg font-bold">Confirmar exportacion</h3>
-              <p className="text-xs text-emerald-100">Se exportaran {statusSummary.total} muestras.</p>
+              <p className="text-xs text-emerald-100">Se exportarán {filteredSamples.length} muestras.</p>
             </div>
             <div className="p-5 space-y-3 text-sm text-gray-600">
               <p>
-                El archivo incluira una hoja de resultados y un resumen con los filtros aplicados.
+                El archivo incluira una hoja de resultados. El archivo contiene la información relevante de los resultados, como identificador de muestra, tipo de prueba, resultado obtenido y fecha.
               </p>
               {exportError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
