@@ -233,6 +233,12 @@ export default function ProjectDetailPage() {
         try {
           const samplesResponse = await apiService.samples.getAll(projectId);
           samplesData = Array.isArray(samplesResponse) ? samplesResponse : (samplesResponse?.data || []);
+          
+          // Filtrar solo las muestras del proyecto actual
+          samplesData = samplesData.filter(sample => {
+            const sampleProjectId = sample?.project?.id || sample?.projectId;
+            return String(sampleProjectId) === String(projectId);
+          });
         } catch (samplesErr) {
           console.warn('Error cargando muestras:', samplesErr);
           samplesData = [];
