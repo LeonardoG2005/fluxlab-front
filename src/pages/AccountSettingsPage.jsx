@@ -28,6 +28,10 @@ const PROFILE_INITIAL_STATE = {
 
 const NAME_MIN_LENGTH = 5;
 const NAME_ALLOWED_REGEX = /^[\p{L}\s]+$/u;
+const EMAIL_MAX_LENGTH = 254;
+const EMAIL_LOCAL_MAX_LENGTH = 64;
+const EMAIL_LABEL_MAX_LENGTH = 63;
+const EMAIL_LOCAL_ALLOWED_REGEX = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$/;
 
 function resolveUserId(user) {
   return user?.id || user?.sub || user?.user_id || '';
@@ -59,6 +63,78 @@ function getNameValidationError(value) {
 
   if (!NAME_ALLOWED_REGEX.test(trimmedValue)) {
     return 'El nombre solo puede contener letras y espacios.';
+  }
+
+  return '';
+}
+
+function getEmailValidationError(value) {
+  const trimmedValue = String(value || '').trim();
+
+  if (!trimmedValue) {
+    return 'El correo es obligatorio.';
+  }
+
+  if (trimmedValue.length > EMAIL_MAX_LENGTH) {
+    return 'El correo excede la longitud permitida.';
+  }
+
+  if (/\s/.test(trimmedValue)) {
+    return 'El correo no puede contener espacios.';
+  }
+
+  const emailParts = trimmedValue.split('@');
+
+  if (emailParts.length !== 2) {
+    return 'El correo debe contener un solo "@".';
+  }
+
+  const [localPart, domainPart] = emailParts;
+
+  if (!localPart || !domainPart) {
+    return 'El correo debe incluir usuario y dominio.';
+  }
+
+  if (localPart.length > EMAIL_LOCAL_MAX_LENGTH) {
+    return 'La parte antes del "@" es demasiado larga.';
+  }
+
+  if (!EMAIL_LOCAL_ALLOWED_REGEX.test(localPart)) {
+    return 'El correo contiene caracteres invalidos.';
+  }
+
+  if (localPart.startsWith('.') || localPart.endsWith('.') || localPart.includes('..')) {
+    return 'La parte antes del "@" no puede iniciar, terminar o repetir puntos.';
+  }
+
+  if (domainPart.includes('..')) {
+    return 'El dominio no puede contener puntos dobles.';
+  }
+
+  const domainLabels = domainPart.split('.');
+
+  if (domainLabels.length < 2) {
+    return 'El dominio debe incluir una extension valida.';
+  }
+
+  for (const label of domainLabels) {
+    if (!label.length || label.length > EMAIL_LABEL_MAX_LENGTH) {
+      return 'El dominio contiene una seccion con longitud invalida.';
+    }
+
+    if (!/^[A-Za-z0-9-]+$/.test(label)) {
+      return 'El dominio contiene caracteres invalidos.';
+    }
+
+    if (label.startsWith('-') || label.endsWith('-')) {
+      return 'El dominio no puede iniciar o terminar con guion.';
+    }
+  }
+
+  const topLevelDomain = domainLabels[domainLabels.length - 1];
+
+  if (!/^[A-Za-z]{2,63}$/.test(topLevelDomain)) {
+    return 'La extension del dominio no es valida.';
   }
 
   return '';
@@ -143,8 +219,14 @@ export default function AccountSettingsPage() {
       return false;
     }
 
-    return profileForm.name.trim() !== String(user?.name || '').trim();
-  }, [profileForm.name, user]);
+    const currentName = String(user?.name || '').trim();
+    const currentEmail = String(user?.email || '').trim();
+
+    return (
+      profileForm.name.trim() !== currentName
+      || profileForm.email.trim() !== currentEmail
+    );
+  }, [profileForm.email, profileForm.name, user]);
 
   const handleProfileChange = (event) => {
     const { name, value } = event.target;
@@ -172,9 +254,16 @@ export default function AccountSettingsPage() {
 
     const trimmedName = profileForm.name.trim();
     const nameValidationError = getNameValidationError(trimmedName);
+    const trimmedEmail = profileForm.email.trim();
+    const emailValidationError = getEmailValidationError(trimmedEmail);
 
     if (nameValidationError) {
       setProfileError(nameValidationError);
+      return;
+    }
+
+    if (emailValidationError) {
+      setProfileError(emailValidationError);
       return;
     }
 
@@ -182,17 +271,20 @@ export default function AccountSettingsPage() {
 
     try {
       const updatedUser = await updateUser(userId, {
-        name: trimmedName
+        name: trimmedName,
+        email: trimmedEmail
       });
 
       updateUserProfile({
         ...updatedUser,
-        name: updatedUser?.name || trimmedName
+        name: updatedUser?.name || trimmedName,
+        email: updatedUser?.email || trimmedEmail
       });
 
       setProfileForm((current) => ({
         ...current,
-        name: trimmedName
+        name: trimmedName,
+        email: trimmedEmail
       }));
 
       setProfileSuccess('Datos personales actualizados correctamente.');
@@ -319,9 +411,12 @@ export default function AccountSettingsPage() {
                   </label>
                   <input
                     type="email"
+                    name="email"
                     value={profileForm.email}
-                    disabled
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
+                    onChange={handleProfileChange}
+                    placeholder="tu.correo@dominio.com"
+                    disabled={savingProfile}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
 
