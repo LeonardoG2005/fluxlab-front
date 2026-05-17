@@ -48,6 +48,21 @@ function getCypressAuthBootstrap() {
   };
 }
 
+function mergeSessionUser(sessionUser, currentUser) {
+  if (!sessionUser) {
+    return currentUser || null;
+  }
+
+  if (!currentUser) {
+    return sessionUser;
+  }
+
+  return {
+    ...sessionUser,
+    ...currentUser,
+  };
+}
+
 /**
  * Auth Provider Component
  * Wrap your App with this to enable authentication throughout the app
@@ -90,11 +105,11 @@ export function AuthProvider({ children }) {
               const userData = await response.json();
               setUser({ ...currentSession.user, ...userData });
             } else {
-              setUser(currentSession.user);
+              setUser((current) => mergeSessionUser(currentSession.user, current));
             }
           } catch (err) {
             console.error('Error fetching backend user in initializeAuth:', err);
-            setUser(currentSession.user);
+            setUser((current) => mergeSessionUser(currentSession.user, current));
           }
         }
       } catch (err) {
@@ -138,11 +153,11 @@ export function AuthProvider({ children }) {
               const userData = await response.json();
               setUser({ ...session.user, ...userData });
             } else {
-              setUser(session.user);
+              setUser((current) => mergeSessionUser(session.user, current));
             }
           } catch (err) {
             console.error('Error fetching backend user on auth change:', err);
-            setUser(session.user);
+            setUser((current) => mergeSessionUser(session.user, current));
           }
         }
       );

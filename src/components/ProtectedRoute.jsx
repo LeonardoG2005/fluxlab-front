@@ -14,7 +14,7 @@ function requiresPasswordChange(user) {
   }
 
   const isAdmin = user?.app_metadata?.role === 'admin' || user?.role === 'admin';
-  return !isAdmin && user?.passwordChanged !== true;
+  return !isAdmin && user?.passwordChanged === false;
 }
 
 function LoadingScreen() {
