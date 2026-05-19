@@ -485,7 +485,7 @@ export default function ReportsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <input
                       type="text"
-                      placeholder="Buscar por codigo de muestra"
+                      placeholder="Buscar por código de muestra"
                       value={filters.search}
                       onChange={(event) => updateFilter('search', event.target.value)}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
@@ -572,7 +572,7 @@ export default function ReportsPage() {
                       <table className="w-full">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Codigo</th>
+                            <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Código</th>
                             <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Proyecto</th>
                             <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Tipo de prueba</th>
                             <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Estado</th>

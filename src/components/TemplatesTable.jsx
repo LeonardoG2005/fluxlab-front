@@ -88,7 +88,7 @@ export default function TemplatesTable() {
   };
 
   const buildTemplateHeaders = (template) => {
-    const baseHeaders = ['clientCode', 'code'];
+    const baseHeaders = ['code', 'customCode'];
     const fields = Array.isArray(template?.fields) ? template.fields : [];
     const reservedHeaders = new Set(baseHeaders.map((header) => header.toLowerCase()));
     const uniqueHeaders = [];
