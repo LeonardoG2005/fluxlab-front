@@ -1988,7 +1988,7 @@ export default function SamplesTable() {
               {/* Código */}
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 font-bold">
-                  CÓDIGO DEL LABORATORIO *
+                  CÓDIGO DEL CLIENTE *
                 </label>
                 <input
                   type="text"
