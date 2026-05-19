@@ -49,6 +49,7 @@ export default function SamplesTable() {
   const [editingId, setEditingId] = useState(null);
   const [editFormData, setEditFormData] = useState({
     code: '',
+    customCode: '',
     status: '',
     fieldValues: {}
   });
@@ -76,6 +77,7 @@ export default function SamplesTable() {
     templateId: null,
     projectId: null,
     code: '',
+    customCode: '',
     status: 'pending',
     fieldValues: {}
   });
@@ -84,6 +86,7 @@ export default function SamplesTable() {
   // Dedicated Create Form State (for the Modal)
   const [createFormData, setCreateFormData] = useState({
     code: '',
+    customCode: '',
     projectId: '',
     templateId: '',
     status: 'pending'
@@ -207,7 +210,13 @@ export default function SamplesTable() {
         name: normalizeFieldKey(field?.name),
         rawName: String(field?.name || '')
       }))
-      .filter((field) => field.name && field.name !== 'code' && field.rawName.trim() !== '')
+      .filter((field) =>
+        field.name &&
+        field.name !== 'code' &&
+        field.name !== 'customcode' &&
+        field.name !== 'custom_code' &&
+        field.rawName.trim() !== ''
+      )
       .map((field) => field.name)
       .join('||');
   };
@@ -504,6 +513,7 @@ export default function SamplesTable() {
 
     setEditFormData({
       code: sample.code || '',
+      customCode: sample.customCode || '',
       status: sample.status,
       fieldValues: initialFieldValues
     });
@@ -511,7 +521,7 @@ export default function SamplesTable() {
 
   const cancelEditing = () => {
     setEditingId(null);
-    setEditFormData({ code: '', status: '', fieldValues: {} });
+    setEditFormData({ code: '', customCode: '', status: '', fieldValues: {} });
   };
 
   const handleSearch = (query) => {
@@ -544,6 +554,8 @@ export default function SamplesTable() {
     setIsSubmitting(true);
     try {
       const normalizedCode = String(editFormData.code || '').trim();
+      const normalizedCustomCode = String(editFormData.customCode || '').trim();
+      const nextCustomCode = normalizedCustomCode ? normalizedCustomCode : null;
 
       if (!normalizedCode) {
         throw new Error('El código de la muestra es obligatorio.');
@@ -552,6 +564,7 @@ export default function SamplesTable() {
       const template = templates.find(t => t.id === (sample.template?.id || sample.templateId));
       const payload = {
         status: editFormData.status,
+        customCode: nextCustomCode,
         values: Object.entries(editFormData.fieldValues).map(([fieldId, value]) => {
           const field = template?.fields?.find(f => f.id === fieldId);
           return {
@@ -564,10 +577,13 @@ export default function SamplesTable() {
         })
       };
 
-      await apiService.samples.update(sample.id, {
+      const updatePayload = {
         code: normalizedCode,
-        status: editFormData.status
-      });
+        status: editFormData.status,
+        customCode: nextCustomCode,
+      };
+
+      await apiService.samples.update(sample.id, updatePayload);
 
       const updatedSample = await apiService.samples.updateWithValues(sample.id, payload);
 
@@ -578,16 +594,21 @@ export default function SamplesTable() {
           return {
             ...existingSample,
             code: normalizedCode,
+            customCode: nextCustomCode,
             status: payload.status,
           };
         }
 
-        return {
+        const mergedSample = {
           ...existingSample,
           ...updatedSample,
           template: updatedSample.template ?? existingSample.template,
           project: updatedSample.project ?? existingSample.project,
         };
+
+        mergedSample.customCode = nextCustomCode;
+
+        return mergedSample;
       }));
       cancelEditing();
 
@@ -614,6 +635,7 @@ export default function SamplesTable() {
     setIsSubmitting(true);
     try {
       const template = templates.find(t => t.id === createFormData.templateId);
+      const normalizedCustomCode = String(createFormData.customCode || '').trim();
       
       const initialValues = (template?.fields || []).map(field => {
         const base = { fieldId: field.id };
@@ -623,14 +645,23 @@ export default function SamplesTable() {
         return { ...base, valueText: "" };
       });
 
-      await apiService.samples.createWithValues({
-        ...createFormData,
+      const payload = {
+        code: createFormData.code,
+        projectId: createFormData.projectId,
+        templateId: createFormData.templateId,
+        status: createFormData.status,
         values: initialValues
-      });
+      };
+
+      if (normalizedCustomCode) {
+        payload.customCode = normalizedCustomCode;
+      }
+
+      await apiService.samples.createWithValues(payload);
       
       await loadData(filters.clientId);
       setShowCreateModal(false);
-      setCreateFormData({ code: '', projectId: '', templateId: '', status: 'pending' });
+      setCreateFormData({ code: '', customCode: '', projectId: '', templateId: '', status: 'pending' });
     } catch (err) {
       setError(err.message || 'Error al crear la muestra');
     } finally {
@@ -662,6 +693,7 @@ export default function SamplesTable() {
     setIsSubmitting(true);
     try {
       const template = templates.find(t => t.id === templateId);
+      const normalizedCustomCode = String(quickAddRow.customCode || '').trim();
       const payload = {
         code: quickAddRow.code,
         status: quickAddRow.status,
@@ -678,6 +710,10 @@ export default function SamplesTable() {
         })
       };
 
+      if (normalizedCustomCode) {
+        payload.customCode = normalizedCustomCode;
+      }
+
       const createdSample = await apiService.samples.createWithValues(payload);
       const project = projects.find(p => p.id === projectId);
 
@@ -692,6 +728,7 @@ export default function SamplesTable() {
         : {
             id: `temp-${Date.now()}`,
             code: payload.code,
+            customCode: payload.customCode ?? null,
             status: payload.status,
             templateId,
             projectId,
@@ -707,7 +744,7 @@ export default function SamplesTable() {
         return [...prevSamples, normalizedSample];
       });
 
-      setQuickAddRow({ templateId: null, projectId: null, code: '', status: 'pending', fieldValues: {} });
+      setQuickAddRow({ templateId: null, projectId: null, code: '', customCode: '', status: 'pending', fieldValues: {} });
       setQuickAddErrorRowKey(null);
 
       if (scrollContainer && typeof previousScrollTop === 'number') {
@@ -811,7 +848,7 @@ export default function SamplesTable() {
       index
     }));
 
-    const templateColumns = headerMeta.filter((column, index) => index !== 0);
+    const templateColumns = headerMeta.filter((column, index) => index > 1);
 
     const templateFieldMap = new Map(
       templateFields.map((field) => [normalizeFieldKey(field.name), field])
@@ -844,6 +881,7 @@ export default function SamplesTable() {
 
     const samplesPayload = sampleRows.map((row, rowIndex) => {
       const code = String(row[0] || '').trim();
+      const customCode = String(row[1] || '').trim();
       if (!code) {
         throw new Error(`La fila ${rowIndex + 2} no tiene valor en la columna code.`);
       }
@@ -858,13 +896,19 @@ export default function SamplesTable() {
         };
       });
 
-      return {
+      const samplePayload = {
         code,
         templateId: template.id,
         projectId: project.id,
         status: 'pending',
         values
       };
+
+      if (customCode) {
+        samplePayload.customCode = customCode;
+      }
+
+      return samplePayload;
     });
 
     await apiService.samples.createManyWithValues({ samples: samplesPayload });
@@ -965,7 +1009,9 @@ export default function SamplesTable() {
 
       resetImportDraft();
     } catch (err) {
-      setImportModalError(err.message || 'No se pudo importar. Verifica si hay códigos de muestra duplicados.');
+      setImportModalError(
+        err.message || 'No se pudo importar. Verifica si hay códigos o customCode duplicados.'
+      );
     } finally {
       setImportingProjectId(null);
     }
@@ -999,8 +1045,8 @@ export default function SamplesTable() {
       const sampleRows = contentRows.slice(1);
 
       const width = headerRow.length;
-      if (width < 2) {
-        throw new Error('El archivo debe tener la columna code y al menos una columna de campo.');
+      if (width < 3) {
+        throw new Error('El archivo debe tener las columnas code y customCode, y al menos una columna de campo.');
       }
 
       const normalizedSampleRows = sampleRows.map((row, index) => {
@@ -1037,7 +1083,15 @@ export default function SamplesTable() {
         throw new Error('La primera columna debe llamarse exactamente code.');
       }
 
-      const templateColumns = headerMeta.slice(1);
+      const customCodeColumn = headerMeta[1];
+      const normalizedCustomCodeHeader = customCodeColumn?.normalized;
+      const isCustomCodeHeader = ['customcode', 'custom_code'].includes(normalizedCustomCodeHeader);
+
+      if (!isCustomCodeHeader) {
+        throw new Error('La segunda columna debe llamarse customCode.');
+      }
+
+      const templateColumns = headerMeta.slice(2);
 
       if (templateColumns.length === 0) {
         throw new Error('No hay columnas para construir campos de plantilla.');
@@ -1205,8 +1259,13 @@ export default function SamplesTable() {
         return false;
       }
 
-      if (normalizedQuery && !normalizeText(sample.code).includes(normalizedQuery)) {
-        return false;
+      if (normalizedQuery) {
+        const matchesCode = normalizeText(sample.code).includes(normalizedQuery);
+        const matchesCustomCode = normalizeText(sample.customCode).includes(normalizedQuery);
+
+        if (!matchesCode && !matchesCustomCode) {
+          return false;
+        }
       }
 
       if (!filters.fromDate && !filters.toDate) {
@@ -1346,7 +1405,7 @@ export default function SamplesTable() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
             <input
               type="text"
-              placeholder="Buscar por código de muestra..."
+              placeholder="Buscar por código de cliente o lab"
               value={searchQuery}
               onChange={(event) => handleSearch(event.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
@@ -1510,7 +1569,8 @@ export default function SamplesTable() {
                       <table className="w-full">
                         <thead>
                           <tr className="bg-white border-b border-gray-200">
-                            <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">CÓDIGO</th>
+                            <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">CÓDIGO DEL CLIENTE</th>
+                            <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">CÓDIGO LAB</th>
                             <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">ESTADO</th>
                             <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">FECHA DE CREACIÓN</th>
                             {template.fields?.map(field => (
@@ -1542,10 +1602,28 @@ export default function SamplesTable() {
                                           code: event.target.value,
                                         })
                                       }
-                                      placeholder="Codigo de muestra"
+                                      placeholder="Código de muestra"
                                     />
                                   ) : (
                                     sample.code
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 font-mono text-xs font-bold text-slate-500">
+                                  {isEditingCurrent ? (
+                                    <input
+                                      type="text"
+                                      className="w-full text-xs font-bold text-slate-900 border border-teal-200 rounded px-2 py-1 bg-white"
+                                      value={editFormData.customCode}
+                                      onChange={(event) =>
+                                        setEditFormData({
+                                          ...editFormData,
+                                          customCode: event.target.value,
+                                        })
+                                      }
+                                      placeholder="Código Lab"
+                                    />
+                                  ) : (
+                                    sample.customCode || '-'
                                   )}
                                 </td>
                                 <td className="px-6 py-4">
@@ -1684,6 +1762,16 @@ export default function SamplesTable() {
                               />
                             </td>
                             <td className="px-6 py-3">
+                              <input
+                                type="text"
+                                placeholder="Código Lab"
+                                className="w-full bg-white border border-teal-200 rounded px-2 py-1 text-xs font-bold text-slate-500 placeholder-slate-300 focus:ring-1 focus:ring-teal-500 focus:border-teal-300"
+                                value={quickAddRow.templateId === template.id && quickAddRow.projectId === project.id ? quickAddRow.customCode : ""}
+                                onChange={(e) => setQuickAddRow({ ...quickAddRow, templateId: template.id, projectId: project.id, customCode: e.target.value })}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleQuickAdd(template.id, project.id); }}
+                              />
+                            </td>
+                            <td className="px-6 py-3">
                               <select 
                                 className="w-full bg-white border border-teal-200 rounded px-2 py-1 text-[10px] font-black uppercase text-slate-500 cursor-pointer focus:ring-1 focus:ring-teal-500 focus:border-teal-300"
                                 value={quickAddRow.templateId === template.id && quickAddRow.projectId === project.id ? quickAddRow.status : "pending"}
@@ -1762,7 +1850,7 @@ export default function SamplesTable() {
 
             <div className="p-6 space-y-5 max-h-[75vh] overflow-auto">
               <div className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-2 text-xs">
-                <span className="font-black">Aviso:</span> la columna <span className="font-black">code</span> es obligatoria y no crea un campo nuevo. Tamaño máximo: <span className="font-black">20 MB</span>.
+                <span className="font-black">Aviso:</span> las columnas <span className="font-black">code</span> y <span className="font-black">customCode</span> son obligatorias en la estructura y no crean campos nuevos. Tamaño máximo: <span className="font-black">20 MB</span>.
               </div>
 
               {existingTemplateByNameForImport && !hasKnownNameConflict && (
@@ -1900,7 +1988,7 @@ export default function SamplesTable() {
               {/* Código */}
               <div>
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 font-bold">
-                  CÓDIGO DE MUESTRA *
+                  CÓDIGO DEL CLIENTE *
                 </label>
                 <input
                   type="text"
@@ -1909,6 +1997,20 @@ export default function SamplesTable() {
                   value={createFormData.code}
                   onChange={(e) => setCreateFormData({...createFormData, code: e.target.value})}
                   required
+                />
+              </div>
+
+              {/* Custom Code */}
+              <div>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 font-bold">
+                  CÓDIGO LABORATORIO
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: EXT-001"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-gray-700 transition"
+                  value={createFormData.customCode}
+                  onChange={(e) => setCreateFormData({...createFormData, customCode: e.target.value})}
                 />
               </div>
 
