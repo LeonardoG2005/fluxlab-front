@@ -15,6 +15,7 @@ import {
   faUsers,
   faUserGear
 } from '@fortawesome/free-solid-svg-icons';
+import { getUserDisplayName } from '../utils/userDisplay';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/logoConFondo.jpeg';
 import Icon from './Icon';
@@ -128,6 +129,8 @@ export function Sidebar() {
     return location.pathname === path;
   };
 
+  const displayName = getUserDisplayName(user);
+
   return (
     <aside
       className={`${
@@ -218,7 +221,7 @@ export function Sidebar() {
           <div className="bg-gray-50 rounded-lg p-3">
             <p className="text-xs font-semibold text-gray-500 mb-1">Iniciaste sesión como</p>
             <p className="text-sm font-semibold text-gray-900 truncate">
-              {user?.name || user?.email?.split('@')[0] || 'User'}
+              {displayName || 'User'}
             </p>
             <p className="text-xs text-gray-500 capitalize truncate">
               {getRoleDisplayLabel(userRole)}

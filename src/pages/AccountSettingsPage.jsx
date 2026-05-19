@@ -19,6 +19,7 @@ import Sidebar from '../components/Sidebar';
 import Icon from '../components/Icon';
 import { useAuth } from '../context/AuthContext';
 import { updateUser, updateUserPassword } from '../services/userService';
+import { getUserDisplayName } from '../utils/userDisplay';
 
 const PROFILE_INITIAL_STATE = {
   name: '',
@@ -167,7 +168,7 @@ export default function AccountSettingsPage() {
     }
 
     setProfileForm({
-      name: user?.name || '',
+      name: getUserDisplayName(user, { fallbackToEmail: false }),
       email: user?.email || '',
       role: roleLabel
     });
@@ -219,7 +220,7 @@ export default function AccountSettingsPage() {
       return false;
     }
 
-    const currentName = String(user?.name || '').trim();
+    const currentName = String(getUserDisplayName(user, { fallbackToEmail: false }) || '').trim();
     const currentEmail = String(user?.email || '').trim();
 
     return (

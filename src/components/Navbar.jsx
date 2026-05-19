@@ -11,11 +11,14 @@ import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { faGear, faRightFromBracket } from '@fortawesome/free-solid-svg-icons';
 import Icon from './Icon';
+import { getUserDisplayName } from '../utils/userDisplay';
 
 export function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const displayName = getUserDisplayName(user);
+  const nameForInitials = getUserDisplayName(user, { fallbackToEmail: false });
 
   const getRoleDisplayLabel = (role) => {
     switch (role) {
@@ -41,8 +44,8 @@ export function Navbar() {
   // Get user initials for avatar placeholder
   const getInitials = () => {
     if (user?.avatar) return user.avatar;
-    if (user?.name) {
-      return user.name
+    if (nameForInitials) {
+      return nameForInitials
         .split(' ')
         .map(n => n[0])
         .join('')
@@ -91,7 +94,7 @@ export function Navbar() {
               {/* User Info - Hidden on mobile */}
               <div className="hidden sm:block text-left">
                 <p className="text-sm font-semibold text-gray-900">
-                  {user?.name || user?.email?.split('@')[0] || 'User'}
+                  {displayName || 'User'}
                 </p>
                 <p className="text-xs text-gray-500 capitalize">
                   {getRoleDisplayLabel(user?.app_metadata?.role || user?.role)}
@@ -108,7 +111,7 @@ export function Navbar() {
                 {/* User Info Section */}
                 <div className="px-4 py-3 border-b border-gray-100">
                   <p className="text-sm font-semibold text-gray-900">
-                    {user?.name || user?.email?.split('@')[0] || 'User'}
+                    {displayName || 'User'}
                   </p>
                   <p className="text-xs text-gray-500">{user?.email}</p>
                 </div>
