@@ -7,21 +7,10 @@
  */
 
 import { authService } from './authService';
+import { API_BASE_URL, CLIENTS_API_BASE_URL, buildApiUrl } from '../utils/apiUrl';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-const CLIENTS_API_URL = import.meta.env.VITE_CLIENTS_API_URL || 'http://localhost:3000/api/clients';
-
-function buildApiUrl(baseUrl, endpoint = '') {
-  if (!endpoint) return baseUrl;
-
-  if (endpoint.startsWith('?')) {
-    return `${baseUrl}${endpoint}`;
-  }
-
-  const normalizedBase = baseUrl.replace(/\/$/, '');
-  const normalizedEndpoint = endpoint.replace(/^\//, '');
-  return `${normalizedBase}/${normalizedEndpoint}`;
-}
+const API_URL = API_BASE_URL;
+const CLIENTS_API_URL = CLIENTS_API_BASE_URL;
 
 async function parseResponseBody(response) {
   if (response.status === 204) {
@@ -51,6 +40,9 @@ async function parseResponseBody(response) {
  */
 async function apiRequest(endpoint, options = {}, baseUrl = API_URL) {
   try {
+    if (!baseUrl) {
+      throw new Error('API URL no configurada. Configura VITE_API_URL.');
+    }
     // Get JWT token from Supabase
     const token = await authService.getAccessToken();
     

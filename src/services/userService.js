@@ -3,8 +3,17 @@
  * Handles communication with backend user endpoints
  */
 
-// Backend API URL - Update this when backend is ready
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+import { API_BASE_URL, buildApiUrl } from '../utils/apiUrl';
+
+// Backend API URL - dev fallback only
+const API_URL = API_BASE_URL;
+
+function getApiBase() {
+  if (!API_URL) {
+    throw new Error('API URL no configurada. Configura VITE_API_URL.');
+  }
+  return API_URL.replace(/\/$/, '');
+}
 
 /**
  * Generate a temporary default password
@@ -70,7 +79,7 @@ export async function createUser(userData) {
       active: true,
     };
 
-    const response = await fetch(`${API_URL}/users`, {
+    const response = await fetch(buildApiUrl(getApiBase(), 'users'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -107,7 +116,7 @@ export async function getAllUsers() {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetch(`${API_URL}/users`, {
+    const response = await fetch(buildApiUrl(getApiBase(), 'users'), {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -136,7 +145,7 @@ export async function deleteUser(userId) {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetch(`${API_URL}/users/${userId}`, {
+    const response = await fetch(buildApiUrl(getApiBase(), `users/${userId}`), {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -165,7 +174,7 @@ export async function updateUserPassword(userId, currentPassword, newPassword) {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetch(`${API_URL}/users/${userId}/password`, {
+    const response = await fetch(buildApiUrl(getApiBase(), `users/${userId}/password`), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -196,7 +205,7 @@ export async function getUser(userId) {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetch(`${API_URL}/users/${userId}`, {
+    const response = await fetch(buildApiUrl(getApiBase(), `users/${userId}`), {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -225,7 +234,7 @@ export async function updateUser(userId, userData) {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetch(`${API_URL}/users/${userId}`, {
+    const response = await fetch(buildApiUrl(getApiBase(), `users/${userId}`), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

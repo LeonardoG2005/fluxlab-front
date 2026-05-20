@@ -6,6 +6,7 @@
  */
 
 import { supabase } from '../config/supabase';
+import { API_BASE_URL, buildApiUrl } from '../utils/apiUrl';
 
 export const authService = {
   /**
@@ -32,23 +33,28 @@ export const authService = {
       
       if (token) {
         try {
-          console.log('Fetching user data from backend...');
-          const response = await fetch('http://localhost:3000/api/users/me', {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
-
-          console.log('Backend response status:', response.status);
-
-          if (response.ok) {
-            backendData = await response.json();
-            console.log('Backend user data:', backendData);
-            passwordChanged = backendData.passwordChanged === true;
+          const backendUrl = buildApiUrl(API_BASE_URL, 'users/me');
+          if (!backendUrl) {
+            console.warn('API URL no configurada o no disponible; se omite la consulta al backend.');
           } else {
-            console.error('Backend error:', response.statusText);
+            console.log('Fetching user data from backend...');
+            const response = await fetch(backendUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+
+            console.log('Backend response status:', response.status);
+
+            if (response.ok) {
+              backendData = await response.json();
+              console.log('Backend user data:', backendData);
+              passwordChanged = backendData.passwordChanged === true;
+            } else {
+              console.error('Backend error:', response.statusText);
+            }
           }
         } catch (err) {
           console.error('Error fetching user data from backend:', err);
@@ -170,7 +176,12 @@ export const authService = {
         throw new Error('No authentication token found');
       }
 
-      const response = await fetch('http://localhost:3000/api/users/change-password', {
+      const backendUrl = buildApiUrl('users/change-password');
+      if (!backendUrl) {
+        throw new Error('API URL no configurada.');
+      }
+
+      const response = await fetch(backendUrl, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,

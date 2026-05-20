@@ -8,9 +8,11 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { authService } from '../services/authService';
 import { supabase } from '../config/supabase';
+import { API_BASE_URL, buildApiUrl } from '../utils/apiUrl';
 
 // Create the auth context
 const AuthContext = createContext(null);
+
 
 function readJsonStorageValue(key) {
   if (typeof window === 'undefined') {
@@ -93,7 +95,13 @@ export function AuthProvider({ children }) {
 
           // Try to fetch backend user data to enrich session.user (passwordChanged, role, etc.)
           try {
-            const response = await fetch('http://localhost:3000/api/users/me', {
+            const backendUrl = buildApiUrl(API_BASE_URL, 'users/me');
+            if (!backendUrl) {
+              setUser((current) => mergeSessionUser(currentSession.user, current));
+              return;
+            }
+
+            const response = await fetch(backendUrl, {
               method: 'GET',
               headers: {
                 'Authorization': `Bearer ${currentSession.access_token}`,
@@ -141,7 +149,13 @@ export function AuthProvider({ children }) {
 
           // Fetch backend user info and merge (so we have passwordChanged and DB role)
           try {
-            const response = await fetch('http://localhost:3000/api/users/me', {
+            const backendUrl = buildApiUrl(API_BASE_URL, 'users/me');
+            if (!backendUrl) {
+              setUser((current) => mergeSessionUser(session.user, current));
+              return;
+            }
+
+            const response = await fetch(backendUrl, {
               method: 'GET',
               headers: {
                 'Authorization': `Bearer ${session.access_token}`,
